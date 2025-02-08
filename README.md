@@ -1,4 +1,4 @@
-# Rational Method Output Parser - v1.0.0
+# Rational Method Output Parser — v1.0.0
 Created by Griffin Kowash, 7 February 2025
 
 To report bugs or request improvements, please open a Github issue or email gkowash@gmail.com.
