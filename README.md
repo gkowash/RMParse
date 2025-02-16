@@ -1,4 +1,4 @@
-# Hydrology Output Parser — v1.0.0
+# Hydrology Output Parser
 This package provides tools for extracting data from rational method, unit hydrograph, and basin routing output files.
 
 To report bugs or request improvements, please open a Github issue or email Griffin at gkowash@gmail.com.
