@@ -23,7 +23,9 @@ from typing import Tuple, List
 from tabulate import tabulate
 
 TABLE_START_FLAG = 'R u n o f f      H y d r o g r a p h'
+TABLE_START_OFFSET = 7
 TABLE_END_FLAG = '-----------------------------------------------------------------------'
+TABLE_END_OFFSET = 0
 TABLE_PATTERN = r'\s*(\d+\+\s*\d+)\s+([\d.]+)\s+([\d.]+).*'
 
 def main() -> None:
@@ -105,10 +107,10 @@ def parse_data_from_lines(lines: List[str]) -> Tuple[float, float]:
     # Locate start and end of table
     for i, line in enumerate(lines):
         if TABLE_START_FLAG.lower() in line:
-            i0 = i + 7  # start of data assumed to be 7 lines after start flag
+            i0 = i + TABLE_START_OFFSET
         if i0 is not None and i > i0:
             if TABLE_END_FLAG.lower() in line:
-                i1 = i
+                i1 = i - TABLE_END_OFFSET
                 break
 
     # Exit program if table was not identified from flags
