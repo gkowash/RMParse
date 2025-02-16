@@ -9,14 +9,16 @@ To report bugs or request improvements, please open a Github issue or email Grif
 - Optionally prints the extracted data to the console in tabular format.
 
 ## Dependencies
-- Requires Python 3.12 or greater
+- Python 3.12 or greater
 - `tabulate` package
 - `PyYAML` package
 
 ## Setup
-Download or clone the [repository](https://github.com/gkowash/RMParse) and move it to the desired location on your machine. If downloading directly, make sure to extract the resulting zip file.
+Download or clone the [repository](https://github.com/gkowash/RMParse) and move it to the desired location on your machine. If downloaded, make sure to extract the resulting zip file.
 
-Ensure that Python 3.12 or greater is installed on the machine. To check the current python installation, run:
+For automatic setup, simply double-click the `install.bat` script in the `RMParse` directory. If the installer finishes successfully, the remainder of this section can be skipped.
+
+For manual setup, first ensure that Python 3.12 or greater is installed on the machine. To check the current python installation, run:
 
 ```bat
 python --version
@@ -39,7 +41,7 @@ Finally, add the location of RMParse to the "Path" environment variable. This ca
 Please contact Griffin if support for Linux is needed.
 
 ## Usage
-Run the script from the command line with:
+Run the script from the command line with the following signature:
 
 ```bat
 rmparse <file1> <file2> ... [-d DIGITS] [-p]
@@ -52,7 +54,7 @@ Arguments:
 
 <!-- A set of input files for testing purposes is provided at `RMParse/test_files`. -->
 
-If a non-default version of Python must be specified, the `rmparse.py` script can be run directly:
+The `rmparse.py` script can also be run directly using your preferred Python executable:
 
 ```text
 <path/to/python.exe> rmparse.py <file1> <file2> ... [-d DIGITS] [-p]
