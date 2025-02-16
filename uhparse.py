@@ -22,10 +22,12 @@ from typing import Tuple, List
 
 from tabulate import tabulate
 
-TABLE_START_FLAG = 'R u n o f f      H y d r o g r a p h'
-TABLE_START_OFFSET = 7
-TABLE_END_FLAG = '-----------------------------------------------------------------------'
-TABLE_END_OFFSET = 0
+class TableConfig:
+    """Configuration settings for parsing table values."""
+    start_flag = 'R u n o f f      H y d r o g r a p h'
+    end_flag = '-----------------------------------------------------------------------'
+    start_offset = 7
+    end_offset = 0
 
 def main() -> None:
     """Parse unit hydrograph output files, print to console, and write to csv."""
@@ -96,19 +98,19 @@ def parse_data_from_lines(lines: List[str]) -> Tuple[float, float]:
 
     # Locate start and end of table
     for i, line in enumerate(lines):
-        if TABLE_START_FLAG.lower() in line:
-            i0 = i + TABLE_START_OFFSET
+        if TableConfig.start_flag.lower() in line:
+            i0 = i + TableConfig.start_offset
         if i0 is not None and i > i0:
-            if TABLE_END_FLAG.lower() in line:
-                i1 = i - TABLE_END_OFFSET
+            if TableConfig.end_flag.lower() in line:
+                i1 = i - TableConfig.end_offset
                 break
 
     # Exit program if table was not identified from flags
     if i0 is None:
-        print(f'Failed to find start of unit hydrograph table using the following flag:\n\t"{TABLE_START_FLAG}"')
+        print(f'Failed to find start of unit hydrograph table using the following flag:\n\t"{TableConfig.start_flag}"')
         sys.exit(1)
     if i1 is None:
-        print(f'Failed to find end of unit hydrograph table using the following flag:\n\t"{TABLE_END_FLAG}"')
+        print(f'Failed to find end of unit hydrograph table using the following flag:\n\t"{TableConfig.end_flag}"')
         sys.exit(1)
 
     # Find peak flow rate and volume

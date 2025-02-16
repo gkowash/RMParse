@@ -22,10 +22,12 @@ from typing import Tuple, List
 
 from tabulate import tabulate
 
-TABLE_START_FLAG = 'Hydrograph Detention Basin Routing'
-TABLE_START_OFFSET = 7
-TABLE_END_FLAG = '****************************HYDROGRAPH DATA****************************'
-TABLE_END_OFFSET = 1
+class TableConfig:
+    """Configuration settings for parsing table values."""
+    start_flag = 'Hydrograph Detention Basin Routing'
+    end_flag = '****************************HYDROGRAPH DATA****************************'
+    start_offset = 7
+    end_offset = 1
 
 def main() -> None:
     """Parse basin routing output files, print to console, and write to csv."""
@@ -99,22 +101,22 @@ def parse_data_from_lines(lines: List[str]) -> Tuple[float, float] | None:
 
     # Locate start and end of table
     for i, line in enumerate(lines):
-        if TABLE_START_FLAG.lower() in line:
-            i0 = i + TABLE_START_OFFSET
+        if TableConfig.start_flag.lower() in line:
+            i0 = i + TableConfig.start_offset
         if i0 is not None and i > i0:
-            if TABLE_END_FLAG.lower() in line:
-                i1 = i - TABLE_END_OFFSET
+            if TableConfig.end_flag.lower() in line:
+                i1 = i - TableConfig.end_offset
                 break
 
     # Ignore files missing table header. This case occurs when the basin routing program is used to combine
     # multiple unit hydrograph results without performing a basin analysis.
     if i0 is None:
-        print(f'Failed to find start of basin routing table using the following flag:\n\t"{TABLE_START_FLAG}"')
+        print(f'Failed to find start of basin routing table using the following flag:\n\t"{TableConfig.start_flag}"')
         print('The program will ignore this file and continue.')
         return
     # Exit program if table end was not identified from flag
     if i1 is None:
-        print(f'Failed to find end of basin routing table using the following flag:\n\t"{TABLE_END_FLAG}"')
+        print(f'Failed to find end of basin routing table using the following flag:\n\t"{TableConfig.end_flag}"')
         sys.exit(1)
 
     # Find peak outflow and depth
