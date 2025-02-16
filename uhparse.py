@@ -75,15 +75,6 @@ def parse_args() -> Tuple[List[str], int, bool]:
 
     return files, args.save, args.digits
 
-def fix_cmd_arguments(argv):
-    """Fix issues caused by CMD tab-completion with single-quoted paths ending in backslashes."""
-    fixed_args = []
-    for arg in argv: 
-        if arg.startswith("'") and arg.endswith("\\"):  # Detect broken single-quoted paths
-            arg = arg.rstrip("\\").rstrip("'")  # Remove the unwanted backslash and quote
-        fixed_args.append(arg)
-    return fixed_args
-
 def natsort_key(s: str | Path) -> List[str | int]:
     """Key for natural sorting of filenames."""
     if isinstance(s, Path):
