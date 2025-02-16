@@ -30,7 +30,7 @@ time-of-concentration:
   INITIAL_AREA: 'Initial area time of concentration'
   STREET_FLOW: 'TC'
   STREET_INLET: '<undefined>'
-  SUBAREA_ADDITION: 'TC'
+  SUBAREA_ADDITION: 'Time of concentration'
   PIPEFLOW_PROGRAM: 'Time of concentration (TC)'
   PIPEFLOW_USER: 'Time of concentration (TC)'
   CHANNEL_IMPROVED: 'Time of concentration'
