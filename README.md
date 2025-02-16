@@ -4,13 +4,14 @@ This script parses output files from a rational method hydrology model, extracts
 To report bugs or request improvements, please open a Github issue or email Griffin at gkowash@gmail.com.
 
 ## Functionality
-- Identifies and extracts flow rate and time of concentration data from rational method output files.
-- Outputs extracted data as a CSV file.
-- Optionally prints the extracted data in a tabular format.
+- Parses rational method output files for San Bernardino and Riverside counties.
+- Writes node information, flow rate, and time concentration to a CSV file.
+- Optionally prints the extracted data to the console in tabular format.
 
 ## Dependencies
 - Requires Python 3.12 or greater
-- Optional: The `tabulate` package for pretty-printing tables.
+- `tabulate` package
+- `PyYAML` package
 
 ## Setup
 Download or clone the [repository](https://github.com/gkowash/RMParse) and move it to the desired location on your machine. If downloading directly, make sure to extract the resulting zip file.
@@ -21,10 +22,11 @@ Ensure that Python 3.12 or greater is installed on the machine. To check the cur
 python --version
 ```
 
-Install the `tabulate` package using your preferred package manager. For most users, the following command is sufficient:
+Install the `tabulate` and `PyYAML` packages with the following commands, or using your preferred package manager:
 
 ```bat
 pip install tabulate
+pip install PyYAML
 ```
 
 Finally, add the location of RMParse to the "Path" environment variable. This can be done as follows:
