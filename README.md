@@ -1,5 +1,5 @@
 # Hydrology Output Parser — v1.0.0
-This package provides tools for extracting data from rational method and unit hydrograph output files.
+This package provides tools for extracting data from rational method, unit hydrograph, and basin routing output files.
 
 To report bugs or request improvements, please open a Github issue or email Griffin at gkowash@gmail.com.
 
@@ -13,6 +13,12 @@ To report bugs or request improvements, please open a Github issue or email Grif
 `UHParse`
 - Parses unit hydrograph output files for San Bernardino and Riverside counties
 - Extracts peak flow rate and peak volume
+- Prints results to the console
+- Optionally writes results to a CSV file
+
+`BRParse`
+- Parses basin routing output files for San Bernardino and Riverside counties
+- Extracts peak outflow and peak depth
 - Prints results to the console
 - Optionally writes results to a CSV file
 
@@ -79,9 +85,20 @@ Arguments:
 - `-d`, `--digits`: If provided, sets the number of decimal places for numeric output (default: 2).
 - `-s`, `--save`: If provided, saves the combined data from all output files in CSV format.
 
+### BRParse
+Run the basin routing output parser from the command line with the following signature:
+
+```bat
+brparse <path1> <path2> ... [-d DIGITS] [-s]
+```
+
+Arguments:
+- `paths`: Paths to files or a directory containing basin routing output data. All files must be located in the same directory.
+- `-d`, `--digits`: If provided, sets the number of decimal places for numeric output (default: 2).
+- `-s`, `--save`: If provided, saves the combined data from all output files in CSV format.
+
 ## Examples
 ### RMParse
-
 The following command will parse a rational method output file named `example.out`, save the data to a CSV file with the same name, and print a table to the console:
 ```text
 rmparse example.out --print
@@ -124,13 +141,36 @@ uhparse unit_hydrograph -s
 
 An example terminal output is shown below for reference.
 ```text
-Parsing file UH1.out
-Parsing file UH2.out
+Parsing file UH1.out...
+Parsing file UH2.out...
 
 | Filename       |   Peak flowrate (CFS) |   Peak volume (Ac.ft) |
 |----------------|-----------------------|-----------------------|
 | UH1.out        |                 26.18 |                  5.15 |
 | UH2.out        |                  3.95 |                  0.66 |
+```
+
+To view the table without writing to a CSV file, simply omit the `--save`/`-s` argument.
+
+### BRParse
+The following command will parse all basin routing output files in a directory named `basin_routing`, save the data to a CSV file, and print a table to the console:
+```text
+brparse basin_routing --save
+```
+Or equivalently:
+```text
+brparse basin_routing -s
+```
+
+An example terminal output is shown below for reference.
+```text
+Parsing file BR1.out...
+Parsing file BR2.out...
+
+| Filename      |   Peak outflow (CFS) |   Peak depth (ft) |
+|---------------|----------------------|-------------------|
+| BR1.out       |               166.21 |              7.67 |
+| BR2.out       |                14.87 |              1.50 |
 ```
 
 To view the table without writing to a CSV file, simply omit the `--save`/`-s` argument.
