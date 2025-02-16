@@ -1,26 +1,19 @@
 # Rational Method Output Parser — v1.0.0
-Created by Griffin Kowash, 7 February 2025
+This script parses output files from a rational method hydrology model, extracts relevant flow data, and writes the processed information to CSV format. Additionally, if the "tabulate" package is available, it can print the extracted data to the command line in a formatted table.
 
-To report bugs or request improvements, please open a Github issue or email gkowash@gmail.com.
-
-## Summary
-This script parses output files from a rational method hydrology model, extracts relevant
-flow data, and writes the processed information to CSV format. Additionally, if the 
-"tabulate" package is available, it can print the extracted data to the command line in a formatted table.
+To report bugs or request improvements, please open a Github issue or email Griffin at gkowash@gmail.com.
 
 ## Functionality
-- Reads a text-based hydrology model output file.
-- Identifies and extracts flow rate and time of concentration (TOC) data.
-- Supports different rational method command types, mapped via the `CommandCase` enum.
+- Identifies and extracts flow rate and time of concentration data from rational method output files.
 - Outputs extracted data as a CSV file.
 - Optionally prints the extracted data in a tabular format.
 
 ## Dependencies
-- Requires Python >=3.12
+- Requires Python 3.12 or greater
 - Optional: The `tabulate` package for pretty-printing tables.
 
 ## Setup
-Download or clone the repository at [insert repo URL] and move it to the desired location on your machine. Extract the zip file, if necessary.
+Download or clone the [repository](https://github.com/gkowash/RMParse) and move it to the desired location on your machine. If downloading directly, make sure to extract the resulting zip file.
 
 Ensure that Python 3.12 or greater is installed on the machine. To check the current python installation, run:
 
@@ -59,14 +52,23 @@ Arguments:
 
 If a non-default version of Python must be specified, the `rmparse.py` script can be run directly:
 
-```bat
+```text
 <path/to/python.exe> rmparse.py <file1> <file2> ... [-d DIGITS] [-p]
 ```
 
-## Example output
-
+## Examples
+The following command will parse a rational method output file named `example.out`, save the data to a CSV file with the same name, and print a table to the console:
 ```text
-Wrote to csv file at .\test_files\testA.csv
+rmparse example.out --print
+```
+Or equivalently:
+```text
+rmparse example.out -p
+```
+
+An example terminal output is shown below for reference.
+```text
+Wrote to csv file at example.csv
 
 | Nodes   |   Q (CFS) |   TC (min) |
 |---------|-----------|------------|
@@ -74,4 +76,13 @@ Wrote to csv file at .\test_files\testA.csv
 | 102-102 |      6.65 |      17.00 |
 | 102-103 |     14.69 |      22.19 |
 | 103-104 |     17.94 |      23.70 |
+```
+
+To simulateneously parse two output files located in a directory named `data`, and format the results to one decimal place:
+```text
+rmparse data/example1.out data/example2.out --digits 1
+```
+Or equivalently:
+```text
+rmparse data/example1.out data/example2.out -d 1
 ```
