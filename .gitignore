@@ -1,3 +1,5 @@
 *.csv
 test_files/
 development/
+__pycache__/
+*.pyc
