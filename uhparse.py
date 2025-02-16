@@ -109,7 +109,7 @@ def parse_data_from_lines(lines: List[str]) -> Tuple[float, float]:
         print(f'Failed to find start of unit hydrograph table using the following flag:\n\t"{TABLE_START_FLAG}"')
         sys.exit(1)
     if i1 is None:
-        print(f'Failed to find end of unit hydrograph table using provided flag:\n\t"{TABLE_END_FLAG}"')
+        print(f'Failed to find end of unit hydrograph table using the following flag:\n\t"{TABLE_END_FLAG}"')
         sys.exit(1)
 
     # Find peak flow rate and volume
