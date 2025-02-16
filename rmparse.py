@@ -57,68 +57,42 @@ class CommandCase(Enum):
     CONFLUENCE_MINOR = "CONFLUENCE_MINOR"
     CONFLUENCE_MAIN = "CONFLUENCE_MAIN"
 
-# class Counties(Enum):
-#     """Supported counties with YAML template files."""
-#     SAN_BERNARDINO = "San Bernardino"
-#     RIVERSIDE = "Riverside"
+class County(Enum):
+    """Supported counties for rational method parser."""
+    SAN_BERNARDINO = 'San Bernardino'
+    RIVERSIDE = 'Riverside'
 
-COUNTIES = ('San Bernardino', 'Riverside')
-TEMPLATE_DIR = 'templates'
-# COMMAND_MAP = {
-#     CommandCase.INITIAL_AREA: "INITIAL AREA EVALUATION",
-#     CommandCase.STREET_FLOW: "STREET FLOW TRAVEL TIME",
-#     CommandCase.STREET_INLET: "(command flag undefined)",
-#     CommandCase.SUBAREA_ADDITION: "SUBAREA FLOW ADDITION",
-#     CommandCase.PIPEFLOW_PROGRAM: "PIPEFLOW TRAVEL TIME (Program estimated size)",
-#     CommandCase.PIPEFLOW_USER: "PIPEFLOW TRAVEL TIME (User specified size)",
-#     CommandCase.CHANNEL_IMPROVED: "IMPROVED CHANNEL TRAVEL TIME",
-#     CommandCase.CHANNEL_IRREGULAR: "IRREGULAR CHANNEL FLOW TRAVEL TIME",
-#     CommandCase.USER: "USER DEFINED FLOW INFORMATION AT A POINT",
-#     CommandCase.CONFLUENCE_MINOR: "CONFLUENCE OF MINOR STREAMS",
-#     CommandCase.CONFLUENCE_MAIN: "CONFLUENCE OF MAIN STREAMS"
-# }
+class RMConfig:
+    """Stores mappings and settings for Rational Method parsing."""
+    def __init__(self, data=None):
+        if data:
+            self.load_from_dict(data)
+        else:
+            self.command_map = {}
+            self.flowrate_map = {}
+            self.toc_map = {}
+            self.new_section_text = ""
+            self.confluence_summary_texy = ""
 
-# FLOWRATE_MAP = {
-#     CommandCase.INITIAL_AREA: "Subarea runoff",
-#     CommandCase.STREET_FLOW: "Total runoff",
-#     CommandCase.STREET_INLET: "(command flag undefined)",
-#     CommandCase.SUBAREA_ADDITION: 'Total runoff',
-#     CommandCase.PIPEFLOW_PROGRAM: 'Required pipe flow',
-#     CommandCase.PIPEFLOW_USER: 'Required pipe flow',
-#     CommandCase.CHANNEL_IMPROVED: 'Total runoff',
-#     CommandCase.CHANNEL_IRREGULAR: 'Total runoff',
-#     CommandCase.USER: 'Total runoff',
-#     CommandCase.CONFLUENCE_MINOR: 'Total flow rate',
-#     CommandCase.CONFLUENCE_MAIN: 'Total flow rate'
-# }
+    def load_from_file(self, filepath: str):
+        """Load configuration from a YAML file."""
+        with open(filepath, "r") as file:
+            data = yaml.safe_load(file)
+        self.load_from_dict(data)
 
-# TOC_MAP = {
-#     CommandCase.INITIAL_AREA: "Initial area time of concentration =",
-#     CommandCase.STREET_FLOW: "TC =",
-#     CommandCase.STREET_INLET: "(command flag undefined)",
-#     CommandCase.SUBAREA_ADDITION: 'Time of concentration =',
-#     CommandCase.PIPEFLOW_PROGRAM: 'Time of concentration (TC) =',
-#     CommandCase.PIPEFLOW_USER: 'Time of concentration (TC) =',
-#     CommandCase.CHANNEL_IMPROVED: 'Time of concentration =',
-#     CommandCase.CHANNEL_IRREGULAR: 'Time of concentration =',
-#     CommandCase.USER: 'TC =',
-#     CommandCase.CONFLUENCE_MINOR: 'Time of concentration =',
-#     CommandCase.CONFLUENCE_MAIN: 'Time of concentration ='
-# }
-
-# NEW_SECTION_TEXT = 'Process from Point/Station'
-# CONFLUENCE_SUMMARY_TEXT = 'Summary of stream data'
-
-COMMAND_MAP = None
-FLOWRATE_MAP = None
-TOC_MAP = None
-NEW_SECTION_TEXT = None
-CONFLUENCE_SUMMARY_TEXT = None
+    def load_from_dict(self, data: dict):
+        """Load configuration from a provided dictionary."""
+        self.command_map = {CommandCase[key]: value.lower() for key, value in data["commands"].items()}
+        self.flowrate_map = {CommandCase[key]: value.lower() + " =" for key, value in data["flowrate"].items()}
+        self.toc_map = {CommandCase[key]: value.lower() + " =" for key, value in data["time-of-concentration"].items()}
+        self.new_section_text = data["new-section-text"].lower()
+        self.confluence_summary_text = data["confluence-summary-text"].lower()
 
 def main() -> None:
     """Parse rational method output file, write data to csv, and print to console."""
     filepaths, precision, print_data = parse_args()
     for filepath in filepaths:
+        print(f'\nParsing {filepath.name}...')
         lines = read_file(filepath)
         data = parse_data_from_lines(lines)
         csv_filepath = get_csv_filepath(filepath)
@@ -160,29 +134,21 @@ def read_file(filepath: str) -> List[str]:
     lines = [line.lower() for line in lines]
     return lines
 
-def load_template_file(filepath: str) -> None:
-    """Populate county-specific text mappings from YAML file."""
-    global COMMAND_MAP, FLOWRATE_MAP, TOC_MAP, NEW_SECTION_TEXT, CONFLUENCE_SUMMARY_TEXT
-    with open(filepath, 'r') as file:
-        data = yaml.safe_load(file)
-    COMMAND_MAP = {CommandCase[key]: value.lower() for key, value in data['commands'].items()}
-    FLOWRATE_MAP = {CommandCase[key]: value.lower() + ' =' for key, value in data['flowrate'].items()}
-    TOC_MAP = {CommandCase[key]: value.lower() + ' =' for key, value in data['time-of-concentration'].items()}
-    NEW_SECTION_TEXT = data['new-section-text'].lower()
-    CONFLUENCE_SUMMARY_TEXT = data['confluence-summary-text'].lower()
-
-def load_template_for_county(county: str) -> None:
+def load_template_for_county(county: County, template_dir: str | Path) -> RMConfig:
     """Load template file corresponding to county name."""
-    filename = county + '.yaml'
-    filepath = Path(__file__).parent / TEMPLATE_DIR / filename
+    filename = county.value + '.yaml'
+    filepath = Path(__file__).parent / template_dir / filename
     if not filepath.exists():
         raise FileNotFoundError(f'Could not find county template at {filepath}')
-    load_template_file(filepath)
+    config = RMConfig()
+    config.load_from_file(filepath)
+    return config
 
-def parse_data_from_lines(lines: List[str]) -> List[Tuple[str, float, float]]:
+def parse_data_from_lines(lines: List[str], template_dir: str | Path = 'templates') -> List[Tuple[str, float, float]]:
     """Extract nodes, time of concentration, and flow rate from list of file lines."""
     state = ParserState.SEARCHING
     county = None
+    config = None
     found_confluence_summary = False
     command = None
     nodes = None
@@ -192,17 +158,17 @@ def parse_data_from_lines(lines: List[str]) -> List[Tuple[str, float, float]]:
 
     for i, line in enumerate(lines):
         if county is None:
-            county = next((county for county in COUNTIES if county.lower() in line), None)
+            county = next((county for county in County if county.value.lower() in line), None)
             if county is None:
                 continue
-            load_template_for_county(county)
+            config = load_template_for_county(county, template_dir)
 
-        if CONFLUENCE_SUMMARY_TEXT in line:
+        if config.confluence_summary_text in line:
             found_confluence_summary = True
 
-        if NEW_SECTION_TEXT in line:
+        if config.new_section_text in line:
             if state == ParserState.SEARCHING:
-                node1, node2 = get_nodes(line)
+                node1, node2 = parse_nodes(line)
                 state = ParserState.PARSING_COMMAND
             # If a confluence entry is missing "Summary of stream data", we don't expect to find flow data
             elif command in (CommandCase.CONFLUENCE_MAIN, CommandCase.CONFLUENCE_MINOR) and not found_confluence_summary:
@@ -216,15 +182,15 @@ def parse_data_from_lines(lines: List[str]) -> List[Tuple[str, float, float]]:
                     \n\tFlow: {flowrate}')
             
         elif state == ParserState.PARSING_COMMAND:
-            command = get_command_case(line)
+            command = get_command_case(line, config)
             if command is not None:
                 nodes = format_nodes(node1, node2, command)
                 state = ParserState.PARSING_STATS
             
         elif state == ParserState.PARSING_STATS:
-            if FLOWRATE_MAP[command] in line:
+            if config.flowrate_map[command] in line:
                 flowrate = get_flowrate(line)
-            elif TOC_MAP[command] in line:
+            elif config.toc_map[command] in line:
                 toc = get_toc(line)
             if flowrate is not None and toc is not None:
                 state = ParserState.STORING_DATA
@@ -240,15 +206,12 @@ def parse_data_from_lines(lines: List[str]) -> List[Tuple[str, float, float]]:
         print('Failed to identify county from output file. Ensure that the county is specified in the COUNTIES variable and has a corresponding YAML template.')
         sys.exit(1)
 
+    print('Finished parsing.')
+
     return data
 
-def get_nodes(text: str) -> str:
-    """Parse text and return formatted note string."""
-    node1, node2 = parse_nodes(text)
-    return node1, node2
-
 def parse_nodes(text: str) -> Tuple[int, int]:
-    """Read node numbers and return formatted string."""
+    """Read line and return node numbers."""
     text_split = text.split()
     node1 = int(float(text_split[3]))
     node2 = int(float(text_split[6]))
@@ -261,9 +224,9 @@ def format_nodes(node1: int, node2: int, command: CommandCase) -> str:
     else:
         return f'{node1}-{node2}'
 
-def get_command_case(text: str) -> ParserState | None:
+def get_command_case(text: str, config: RMConfig) -> ParserState | None:
     """Parse command type, returning None if unspecified in text."""
-    for command_case, flag in COMMAND_MAP.items():
+    for command_case, flag in config.command_map.items():
         if flag in text:
             return command_case
     return None
@@ -292,7 +255,7 @@ def print_to_console(data: List[Tuple[str, float, float]], precision: int = 2) -
     print(tabulate(data, headers=headers, tablefmt=tablefmt, floatfmt=floatfmt))
     print()
 
-def write_to_csv(data: List[Tuple[str, float, float]], filepath: str, precision: int) -> None:
+def write_to_csv(data: List[Tuple[str, float, float]], filepath: str, precision: int, verbose: bool = True) -> None:
     """Output rational method data to .csv file."""
     headers = ['Nodes', 'Q', 'TC']  #TODO: add storm year as suffix to Q
     with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
@@ -300,7 +263,8 @@ def write_to_csv(data: List[Tuple[str, float, float]], filepath: str, precision:
         writer.writerow(headers)
         for node_str, toc, flowrate in data:
             writer.writerow([node_str, f'{toc:.{precision}F}', f'{flowrate:.{precision}F}'])
-    print(f'Saved data to {filepath}')
+    if verbose:
+        print(f'Saved data to {filepath}')
 
 if __name__ == '__main__':
     main()
