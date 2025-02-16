@@ -300,7 +300,7 @@ def write_to_csv(data: List[Tuple[str, float, float]], filepath: str, precision:
         writer.writerow(headers)
         for node_str, toc, flowrate in data:
             writer.writerow([node_str, f'{toc:.{precision}F}', f'{flowrate:.{precision}F}'])
-    print(f'Extracted data to {filepath}')
+    print(f'Saved data to {filepath}')
 
 if __name__ == '__main__':
     main()

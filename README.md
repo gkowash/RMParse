@@ -93,7 +93,7 @@ rmparse example.out -p
 
 An example terminal output is shown below for reference.
 ```text
-Wrote to csv file at example.csv
+Saved data to example.csv
 
 | Nodes   |   Q (CFS) |   TC (min) |
 |---------|-----------|------------|
@@ -133,4 +133,4 @@ Parsing file UH2.out
 | UH2.out        |                  3.95 |                  0.66 |
 ```
 
-To view the results without writing to a CSV file, simply omit the `--save`/`-s` argument.
+To view the table without writing to a CSV file, simply omit the `--save`/`-s` argument.
