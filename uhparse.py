@@ -26,20 +26,19 @@ TABLE_START_FLAG = 'R u n o f f      H y d r o g r a p h'
 TABLE_START_OFFSET = 7
 TABLE_END_FLAG = '-----------------------------------------------------------------------'
 TABLE_END_OFFSET = 0
-TABLE_PATTERN = r'\s*(\d+\+\s*\d+)\s+([\d.]+)\s+([\d.]+).*'
 
 def main() -> None:
     """Parse unit hydrograph output files, print to console, and write to csv."""
     filepaths, save, precision = parse_args()
     data = []
     for filepath in filepaths:
-        print(f'Parsing file {filepath.name}')
+        print(f'\nParsing file {filepath.name}...')
         lines = read_file(filepath)
         peak_flowrate, peak_volume = parse_data_from_lines(lines)
         data.append((filepath.name, peak_flowrate, peak_volume))
-    print_to_console(data, precision=precision)
     if save:
         write_to_csv(data, precision=precision, parent=filepaths[0].parent, filename='Unit Hydrograph Results.csv')
+    print_to_console(data, precision=precision)
 
 def parse_args() -> Tuple[List[str], int, bool]:
     """Parse command line options."""
@@ -114,13 +113,14 @@ def parse_data_from_lines(lines: List[str]) -> Tuple[float, float]:
 
     # Find peak flow rate and volume
     for i, line in enumerate(lines[i0:i1]):
-        match = re.match(TABLE_PATTERN, line)
-        if match is None or len(match.groups()) != 3:
-            print(f'Failed to match text on line {i+i0} to the expected table format.\
-                  This may indicate a malformed data entry or a case not yet handled by the script.')
-        _, v_str, q_str = match.groups()
-        peak_flowrate = max(peak_flowrate, float(q_str))
-        peak_volume = max(peak_volume, float(v_str))
+        matches = re.findall(r'\d+\.\d+', line)  # assumes relevant data points are all decimal values
+        if len(matches) != 2:
+            print((f'Failed to match text on line {i+i0+1} to the expected table format. '
+                    'This may indicate a malformed data entry or a case not yet handled by the script.'))
+        peak_volume = max(peak_volume, float(matches[0]))
+        peak_flowrate = max(peak_flowrate, float(matches[1]))
+
+    print('Finished parsing.')
 
     return peak_flowrate, peak_volume
 
@@ -142,7 +142,7 @@ def write_to_csv(data: List[Tuple[str, float, float]], parent: str | Path, filen
         writer.writerow(headers)
         for filename, peak_flowrate, peak_volume in data:
             writer.writerow([filename, f'{peak_flowrate:.{precision}F}', f'{peak_volume:.{precision}F}'])
-    print(f'Saved data to {filepath}')
+    print(f'\nSaved data to {filepath}')
 
 if __name__ == '__main__':
     main()
