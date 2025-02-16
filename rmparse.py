@@ -131,16 +131,27 @@ def parse_args() -> Tuple[List[str], int, bool]:
     parser = argparse.ArgumentParser(
         prog='Rational method parser',
         description='Parses rational method output files and converts data to csv format.')
-    parser.add_argument('files', nargs='+')
+    parser.add_argument('paths', nargs='+')
     parser.add_argument('-d', '--digits', type=int, default=2)
     parser.add_argument('-p', '--print', action='store_true')
     args = parser.parse_args()
+
+    # Grab all .out files in directories
+    files = []
+    for path in args.paths:
+        path = Path(path)
+        if path.is_dir():
+            files += list(path.glob("*.out"))
+        elif path.is_file():
+            files.append(path)
+        else:
+            raise FileNotFoundError(f'Cannot find item at {path}')
    
     # Warning for csv files
-    if any(file.endswith('.csv') for file in args.files):
+    if any(path.endswith('.csv') for path in args.paths):
         warnings.warn('CSV file provided. Unexpected behavior will occur if attempting to parse the output of a previous RMParse execution.')
 
-    return args.files, args.digits, args.print
+    return files, args.digits, args.print
 
 def read_file(filepath: str) -> List[str]:
     """Read text file into list of lines."""
@@ -289,7 +300,7 @@ def write_to_csv(data: List[Tuple[str, float, float]], filepath: str, precision:
         writer.writerow(headers)
         for node_str, toc, flowrate in data:
             writer.writerow([node_str, f'{toc:.{precision}F}', f'{flowrate:.{precision}F}'])
-    print(f'Wrote to csv file at {filepath}')
+    print(f'Extracted data to {filepath}')
 
 if __name__ == '__main__':
     main()
