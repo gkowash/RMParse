@@ -1,12 +1,20 @@
-# Rational Method Output Parser — v1.0.0
-This script parses output files from a rational method hydrology model, extracts relevant flow data, and writes the processed information to CSV format. Additionally, if the "tabulate" package is available, it can print the extracted data to the command line in a formatted table.
+# Hydrology Output Parser — v1.0.0
+This package provides tools for extracting data from rational method and unit hydrograph output files.
 
 To report bugs or request improvements, please open a Github issue or email Griffin at gkowash@gmail.com.
 
 ## Functionality
-- Parses rational method output files for San Bernardino and Riverside counties.
-- Writes node information, flow rate, and time concentration to a CSV file.
-- Optionally prints the extracted data to the console in tabular format.
+`RMParse`
+- Parses rational method output files for San Bernardino and Riverside counties
+- Extracts node information, flow rate, and time of concentration
+- Writes results to a CSV file
+- Optionally prints results to the console
+
+`UHParse`
+- Parses unit hydrograph output files for San Bernardino and Riverside counties
+- Extracts peak flow rate and peak volume
+- Prints results to the console
+- Optionally writes results to a CSV file
 
 ## Dependencies
 - Python 3.12 or greater
@@ -16,7 +24,7 @@ To report bugs or request improvements, please open a Github issue or email Grif
 ## Setup
 Download or clone the [repository](https://github.com/gkowash/RMParse) and move it to the desired location on your machine. If downloaded, make sure to extract the resulting zip file.
 
-For automatic setup, simply double-click the `install.bat` script in the `RMParse` directory. If the installer finishes successfully, the remainder of this section can be skipped.
+For automatic setup, simply double-click the `install.bat` script in the `RMParse` directory. If the installer finishes successfully, the remainder of this section can be skipped; otherwise, follow the manual instructions and troubleshoot as needed.
 
 For manual setup, first ensure that Python 3.12 or greater is installed on the machine. To check the current python installation, run:
 
@@ -41,26 +49,39 @@ Finally, add the location of RMParse to the "Path" environment variable. This ca
 Please contact Griffin if support for Linux is needed.
 
 ## Usage
-Run the script from the command line with the following signature:
+### RMParse
+Run the rational method output parser from the command line with the following signature:
 
 ```bat
-rmparse <file1> <file2> ... [-d DIGITS] [-p]
+rmparse <path1> <path2> ... [-d DIGITS] [-p]
 ```
 
 Arguments:
-- `files`: One or more rational method output files to parse.
-- `-d`, `--digits`: Number of decimal places for numeric output (default: 2).
-- `-p`, `--print`: Print the extracted data in a table format if the "tabulate" package is available.
-
-<!-- A set of input files for testing purposes is provided at `RMParse/test_files`. -->
+- `paths`: One or more files or directories containing rational method ouput data.
+- `-d`, `--digits`: If provided, sets the number of decimal places for numeric output (default: 2).
+- `-p`, `--print`: If provided, prints the extracted data to the console.
 
 The `rmparse.py` script can also be run directly using your preferred Python executable:
 
 ```text
-<path/to/python.exe> rmparse.py <file1> <file2> ... [-d DIGITS] [-p]
+<path/to/python.exe> rmparse.py <path1> <path2> ... [-d DIGITS] [-p]
 ```
 
+### UHParse
+Run the unit hydrograph output parser from the command line with the following signature:
+
+```bat
+uhparse <path1> <path2> ... [-d DIGITS] [-s]
+```
+
+Arguments:
+- `paths`: Paths to files or a directory containing unit hydrograph output data. All files must be located in the same directory.
+- `-d`, `--digits`: If provided, sets the number of decimal places for numeric output (default: 2).
+- `-s`, `--save`: If provided, saves the combined data from all output files in CSV format.
+
 ## Examples
+### RMParse
+
 The following command will parse a rational method output file named `example.out`, save the data to a CSV file with the same name, and print a table to the console:
 ```text
 rmparse example.out --print
@@ -90,3 +111,26 @@ Or equivalently:
 ```text
 rmparse data/example1.out data/example2.out -d 1
 ```
+
+### UHParse
+The following command will parse all unit hydrograph output files in a directory named `unit_hydrograph`, save the data to a CSV file, and print a table to the console:
+```text
+uhparse unit_hydrograph --save
+```
+Or equivalently:
+```text
+uhparse unit_hydrograph -s
+```
+
+An example terminal output is shown below for reference.
+```text
+Parsing file UH1.out
+Parsing file UH2.out
+
+| Filename       |   Peak flowrate (CFS) |   Peak volume (Ac.ft) |
+|----------------|-----------------------|-----------------------|
+| UH1.out        |                 26.18 |                  5.15 |
+| UH2.out        |                  3.95 |                  0.66 |
+```
+
+To view the results without writing to a CSV file, simply omit the `--save`/`-s` argument.
