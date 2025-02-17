@@ -4,7 +4,7 @@ from unittest.mock import patch, mock_open, MagicMock
 import yaml
 from rmparse import (
     CommandCase, County, RMConfig,
-    parse_args, read_file, load_template_for_county,
+    parse_args, read_file, load_county_config,
     parse_nodes, format_nodes, get_command_case,
     get_flowrate, get_toc, get_csv_filepath, write_to_csv
 )
@@ -31,20 +31,20 @@ class TestRMParse(unittest.TestCase):
 
     @patch('rmparse.Path.exists', return_value=True)
     @patch('builtins.open', new_callable=mock_open, read_data=yaml.dump({
-        "commands": {"INITIAL_AREA": "init"},
-        "flowrate": {"INITIAL_AREA": "flow"},
-        "time-of-concentration": {"INITIAL_AREA": "toc"},
+        "commands": {"INITIAL_AREA": ["init"]},
+        "flowrate": {"INITIAL_AREA": ["flow"]},
+        "time-of-concentration": {"INITIAL_AREA": ["toc"]},
         "new-section-text": "section",
         "confluence-summary-text": "summary"
     }))
-    def test_load_template_for_county(self, mock_file, mock_exists):
+    def test_load_county_config(self, mock_file, mock_exists):
         """Test reading of YAML template into Config object."""
         county = County.SAN_BERNARDINO
         template_dir = 'templates'
-        config = load_template_for_county(county, template_dir)
-        self.assertEqual(config.command_map[CommandCase.INITIAL_AREA], 'init')
-        self.assertEqual(config.flowrate_map[CommandCase.INITIAL_AREA], 'flow =')
-        self.assertEqual(config.toc_map[CommandCase.INITIAL_AREA], 'toc =')
+        config = load_county_config(county, template_dir)
+        self.assertEqual(config.command_map[CommandCase.INITIAL_AREA], ['init'])
+        self.assertEqual(config.flowrate_map[CommandCase.INITIAL_AREA], ['flow ='])
+        self.assertEqual(config.toc_map[CommandCase.INITIAL_AREA], ['toc ='])
         self.assertEqual(config.new_section_text, 'section')
         self.assertEqual(config.confluence_summary_text, 'summary')
 
@@ -63,7 +63,7 @@ class TestRMParse(unittest.TestCase):
     def test_get_command_case(self):
         """Test success and failure cases for parsing command from output file."""
         config = RMConfig()
-        config.command_map = {CommandCase.INITIAL_AREA: "INITIAL AREA EVALUATION"}
+        config.command_map = {CommandCase.INITIAL_AREA: ["INITIAL AREA EVALUATION"]}
         self.assertEqual(get_command_case("	**** INITIAL AREA EVALUATION ****", config), CommandCase.INITIAL_AREA)
         self.assertIsNone(get_command_case("unknown command", config))
 

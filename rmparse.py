@@ -12,7 +12,6 @@ To use the more concise "rmparse" command, add the RMParse repository to the Pat
 variable.
 """
 
-import sys
 import os
 import csv
 import argparse
@@ -64,15 +63,13 @@ class County(Enum):
 
 class RMConfig:
     """Stores mappings and settings for Rational Method parsing."""
-    def __init__(self, data=None):
-        if data:
+    def __init__(self, filepath: Path = None, data: dict = None):
+        if filepath:
+            self.load_from_file(filepath)
+        elif data:
             self.load_from_dict(data)
         else:
-            self.command_map = {}
-            self.flowrate_map = {}
-            self.toc_map = {}
-            self.new_section_text = ""
-            self.confluence_summary_texy = ""
+            self.set_defaults()
 
     def load_from_file(self, filepath: str):
         """Load configuration from a YAML file."""
@@ -81,21 +78,32 @@ class RMConfig:
         self.load_from_dict(data)
 
     def load_from_dict(self, data: dict):
-        """Load configuration from a provided dictionary."""
-        self.command_map = {CommandCase[key]: value.lower() for key, value in data["commands"].items()}
-        self.flowrate_map = {CommandCase[key]: value.lower() + " =" for key, value in data["flowrate"].items()}
-        self.toc_map = {CommandCase[key]: value.lower() + " =" for key, value in data["time-of-concentration"].items()}
-        self.new_section_text = data["new-section-text"].lower()
-        self.confluence_summary_text = data["confluence-summary-text"].lower()
+        """Load configuration from a provided dictionary, ensuring all match values are lists."""
+
+        def normalize(value, suffix=""):
+            """Ensure value is a list and apply transformations to each item."""
+            return [(item.lower() + suffix) for item in (value if isinstance(value, list) else [value])]
+
+        self.command_map = {CommandCase[key]: normalize(value) for key, value in data.get("commands", {}).items()}
+        self.flowrate_map = {CommandCase[key]: normalize(value, suffix=' =') for key, value in data.get("flowrate", {}).items()}
+        self.toc_map = {CommandCase[key]: normalize(value, suffix=' =') for key, value in data.get("time-of-concentration", {}).items()}
+        self.new_section_text = data.get("new-section-text", {}).lower()
+        self.confluence_summary_text = data.get("confluence-summary-text", {}).lower()
+
+    def set_defaults(self):
+        """Set default values if no configuration is provided."""
+        self.command_map = {}
+        self.flowrate_map = {}
+        self.toc_map = {}
+        self.new_section_text = ""
+        self.confluence_summary_text = ""
 
 def main() -> None:
     """Parse rational method output file, write data to csv, and print to console."""
     filepaths, precision, print_data = parse_args()
     for filepath in filepaths:
-        print(f'\nParsing {filepath.name}...')
-        lines = read_file(filepath)
-        data = parse_data_from_lines(lines)
-        csv_filepath = get_csv_filepath(filepath)
+        data = process_file(filepath)
+        csv_filepath = filepath.with_suffix('.csv')
         write_to_csv(data, precision=precision, filepath=csv_filepath)
         if print_data and PRINT_DATA:
             print_to_console(data, precision=precision)
@@ -134,21 +142,34 @@ def read_file(filepath: str) -> List[str]:
     lines = [line.lower() for line in lines]
     return lines
 
-def load_template_for_county(county: County, template_dir: str | Path) -> RMConfig:
+def load_county_config(county: County, template_dir: str | Path) -> RMConfig:
     """Load template file corresponding to county name."""
     filename = county.value + '.yaml'
     filepath = Path(__file__).parent / template_dir / filename
     if not filepath.exists():
         raise FileNotFoundError(f'Could not find county template at {filepath}')
-    config = RMConfig()
-    config.load_from_file(filepath)
+    config = RMConfig(filepath=filepath)
     return config
 
-def parse_data_from_lines(lines: List[str], template_dir: str | Path = 'templates') -> List[Tuple[str, float, float]]:
+def process_file(filepath: Path, template_dir: Path = Path('templates')) -> List[Tuple[str, float, float]]:
+    """Wrapper function to handle file reading, parsing, and status messages."""
+    print(f'\nParsing {filepath.name}...')
+
+    lines = read_file(filepath)
+    county = next((c for c in County if c.value.lower() in " ".join(lines)), None)
+
+    if county is None:
+        raise ValueError("Could not determine county from file. Ensure it is listed in the County enum.")
+    
+    config = load_county_config(county, template_dir)
+    data = parse_data_from_lines(lines, config)
+    
+    print('Finished parsing.')
+    return data
+
+def parse_data_from_lines(lines: List[str], config: RMConfig) -> List[Tuple[str, float, float]]:
     """Extract nodes, time of concentration, and flow rate from list of file lines."""
     state = ParserState.SEARCHING
-    county = None
-    config = None
     found_confluence_summary = False
     command = None
     nodes = None
@@ -157,12 +178,6 @@ def parse_data_from_lines(lines: List[str], template_dir: str | Path = 'template
     data = []
 
     for i, line in enumerate(lines):
-        if county is None:
-            county = next((county for county in County if county.value.lower() in line), None)
-            if county is None:
-                continue
-            config = load_template_for_county(county, template_dir)
-
         if config.confluence_summary_text in line:
             found_confluence_summary = True
 
@@ -188,10 +203,8 @@ def parse_data_from_lines(lines: List[str], template_dir: str | Path = 'template
                 state = ParserState.PARSING_STATS
             
         elif state == ParserState.PARSING_STATS:
-            if config.flowrate_map[command] in line:
-                flowrate = get_flowrate(line)
-            elif config.toc_map[command] in line:
-                toc = get_toc(line)
+            flowrate = flowrate or find_flowrate_in_line(line, config, command)
+            toc = toc or find_toc_in_line(line, config, command)
             if flowrate is not None and toc is not None:
                 state = ParserState.STORING_DATA
         
@@ -201,12 +214,6 @@ def parse_data_from_lines(lines: List[str], template_dir: str | Path = 'template
             flowrate = None
             found_confluence_summary = False
             state = ParserState.SEARCHING
-
-    if county is None:
-        print('Failed to identify county from output file. Ensure that the county is specified in the COUNTIES variable and has a corresponding YAML template.')
-        sys.exit(1)
-
-    print('Finished parsing.')
 
     return data
 
@@ -226,9 +233,21 @@ def format_nodes(node1: int, node2: int, command: CommandCase) -> str:
 
 def get_command_case(text: str, config: RMConfig) -> ParserState | None:
     """Parse command type, returning None if unspecified in text."""
-    for command_case, flag in config.command_map.items():
-        if flag in text:
+    for command_case, flags in config.command_map.items():
+        if any(flag in text for flag in flags):
             return command_case
+    return None
+
+def find_flowrate_in_line(line: str, config: RMConfig, command: CommandCase) -> float | None:
+    """Extracts flowrate from a line if present."""
+    if any(flag in line for flag in config.flowrate_map[command]):
+        return get_flowrate(line)
+    return None
+    
+def find_toc_in_line(line: str, config: RMConfig, command: CommandCase) -> float | None:
+    """Extracts time of concentration from a line if present."""
+    if any(flag in line for flag in config.toc_map[command]):
+        return get_toc(line)
     return None
 
 def get_flowrate(text: str) -> float:
