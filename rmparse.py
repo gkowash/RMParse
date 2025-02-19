@@ -14,6 +14,7 @@ variable.
 
 import os
 import csv
+import re
 import argparse
 import warnings
 from pathlib import Path
@@ -217,14 +218,15 @@ def parse_data_from_lines(lines: List[str], config: RMConfig) -> List[Tuple[str,
 
     return data
 
-def parse_nodes(text: str) -> Tuple[int, int]:
-    """Read line and return node numbers."""
+def parse_nodes(text: str) -> Tuple[str, str]:
+    """Read line and return formatted node strings."""
+    pattern = r'\.?0+$' #remove any trailing zeroes up to and including decimal point
     text_split = text.split()
-    node1 = int(float(text_split[3]))
-    node2 = int(float(text_split[6]))
+    node1 = re.sub(pattern, '', text_split[3])
+    node2 = re.sub(pattern, '', text_split[6])
     return node1, node2
     
-def format_nodes(node1: int, node2: int, command: CommandCase) -> str:
+def format_nodes(node1: str, node2: str, command: CommandCase) -> str:
     """Format a pair of nodes into a string."""
     if command in (CommandCase.CONFLUENCE_MAIN, CommandCase.CONFLUENCE_MINOR):
         return f'*{node1}-{node2}'
