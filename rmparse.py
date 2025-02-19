@@ -88,17 +88,16 @@ class RMConfig:
             return [(item.lower() + suffix) for item in (value if isinstance(value, list) else [value])]
 
         self.command_map = {CommandCase[key]: normalize(value) for key, value in data.get("commands", {}).items()}
-        self.flowrate_map = {CommandCase[key]: normalize(value, suffix=' =') for key, value in data.get("flowrate", {}).items()}
-        self.toc_map = {CommandCase[key]: normalize(value, suffix=' =') for key, value in data.get("time-of-concentration", {}).items()}
+        self.flowrate_map = {CommandCase[key]: normalize(value) for key, value in data.get("flowrate", {}).items()}
+        self.tc_map = {CommandCase[key]: normalize(value) for key, value in data.get("time-of-concentration", {}).items()}
         self.new_section_text = data.get("new-section-text", {}).lower()
-        self.node_text = data.get("node-text", {}).lower()
         self.confluence_summary_text = data.get("confluence-summary-text", {}).lower()
 
     def set_defaults(self):
         """Set default values if no configuration is provided."""
         self.command_map = {}
         self.flowrate_map = {}
-        self.toc_map = {}
+        self.tc_map = {}
         self.new_section_text = ""
         self.confluence_summary_text = ""
 
@@ -139,8 +138,26 @@ def parse_args() -> Tuple[List[str], int, bool]:
 
     return files, args.digits, args.print
 
+def process_file(filepath: Path, template_dir: Path = Path('templates')) -> List[Tuple[str, float, float]]:
+    """Read a single file and return extracted flow data."""
+    print(f'\nParsing {filepath.name}...')
+    lines = read_file_lines(filepath)
+    county = next((c for c in County if c.value.lower() in " ".join(lines)), None)
+    if county is None:
+        raise ValueError("Could not determine county from file. Ensure it is listed in the County enum.")
+    config = load_county_config(county, template_dir)
+    data = parse_data_from_lines(lines, config)
+    print('Finished parsing.')
+    return data
+
 def read_file(filepath: str) -> List[str]:
-    """Read text file into list of lines."""
+    """Read text file into lowercase string."""
+    with open(filepath, 'r', encoding='utf-8') as file:
+        text = file.read()
+    return text.lower()
+
+def read_file_lines(filepath: str) -> List[str]:
+    """Read text file into list of lowercase lines."""
     with open(filepath, 'r', encoding='utf-8') as file:
         lines = file.readlines()
     lines = [line.lower() for line in lines]
@@ -155,85 +172,60 @@ def load_county_config(county: County, template_dir: str | Path) -> RMConfig:
     config = RMConfig(filepath=filepath)
     return config
 
-def process_file(filepath: Path, template_dir: Path = Path('templates')) -> List[Tuple[str, float, float]]:
-    """Wrapper function to handle file reading, parsing, and status messages."""
-    print(f'\nParsing {filepath.name}...')
-    lines = read_file(filepath)
-    county = next((c for c in County if c.value.lower() in " ".join(lines)), None)
-    if county is None:
-        raise ValueError("Could not determine county from file. Ensure it is listed in the County enum.")
-    config = load_county_config(county, template_dir)
-    data = parse_data_from_lines(lines, config)
-    print('Finished parsing.')
-    return data
-
 def parse_data_from_lines(lines: List[str], config: RMConfig) -> List[Tuple[str, float, float]]:
-    """Extract nodes, time of concentration, and flow rate from list of file lines."""
-    state = ParserState.SEARCHING
-    found_confluence_summary = False
-    command = None
-    nodes = None
-    flowrate = None
-    toc = None
+    """Parse data by processing entire sections instead of line-by-line."""
+    sections = split_into_sections(lines, config.new_section_text)
     data = []
 
-    for i, line in enumerate(lines):
-        print(state)
-        if config.new_section_text in line:
-            print(f'{toc=}\n{flowrate=}')
-            # Parse nodes on next line
-            if state == ParserState.SEARCHING:
-                state = ParserState.PARSING_NODES
-            # Skip confluence if "Summary of stream data" is not found before next section header
-            elif command in (CommandCase.CONFLUENCE_MAIN, CommandCase.CONFLUENCE_MINOR) and not found_confluence_summary:
-                print('Skipping confluence')
-                toc = None
-                flowrate = None
-                state = ParserState.PARSING_NODES
-                continue
-            # Throw error if neither of the above conditions are met
-            else:
-                raise InsufficientDataError(f'Failed to determine flow rate and time of concentration before next command header.\
-                    \n\tFinal line: {i}\
-                    \n\tCommand: {command}\
-                    \n\tTC: {toc}\
-                    \n\tFlow: {flowrate}')
-            
-        # Extract start and end node
-        elif state == ParserState.PARSING_NODES:
-            print(line)
-            node1, node2 = parse_nodes(line)
-            state = ParserState.PARSING_COMMAND
+    for i, section in enumerate(sections):
+        nodes = parse_nodes(section[1])  # Assuming nodes are always on the second line
+        command = get_command_case(section[2], config)  # Assuming command is on the third line
+        if command:
+            nodes = format_nodes(*nodes, command)
+        else:
+            print(f'Failed to interpret command for section {i}:\n\t{section[2]}')
+            sys.exit(1)
 
-        # Match command header to expected cases
-        elif state == ParserState.PARSING_COMMAND:
-            command = get_command_case(line, config)
-            if command is not None:
-                nodes = format_nodes(node1, node2, command)
-                state = ParserState.PARSING_STATS
-            else:
-                print('command is None - may indicate error') #TODO: characterize this case in detail
+        flowrate = None
+        tc = None
+        found_confluence_summary = False
 
-        # Read lines until flow rate and TC have been extracted
-        elif state == ParserState.PARSING_STATS:
-            found_confluence_summary = found_confluence_summary or (config.confluence_summary_text in line)
-            if command in (CommandCase.CONFLUENCE_MAIN, CommandCase.CONFLUENCE_MINOR) and not found_confluence_summary:
-                print('skipping stat read for confluence')
-                continue  # for confluences, only read stats located after "Summary of stream data" line
-            flowrate = flowrate or find_flowrate_in_line(line, config, command)
-            toc = toc or find_toc_in_line(line, config, command)
-            if flowrate is not None and toc is not None:
-                state = ParserState.STORING_DATA
+        for line in section[3:]:
+            flowrate = find_flowrate_in_line(line, config, command) or flowrate
+            tc = find_tc_in_line(line, config, command) or tc
+            found_confluence_summary = (config.confluence_summary_text in line) or found_confluence_summary
 
-        # Save data and reset loop variables
-        if state == ParserState.STORING_DATA:
-            data.append((nodes, flowrate, toc))
-            toc = None
-            flowrate = None
-            found_confluence_summary = False
-            state = ParserState.SEARCHING
+        if command in (CommandCase.CONFLUENCE_MAIN, CommandCase.CONFLUENCE_MINOR) and not found_confluence_summary:
+            # print('Skipping confluence.')
+            continue
+        if flowrate and tc:
+            data.append((nodes, flowrate, tc))
+        else:
+            raise InsufficientDataError(f'Failed to determine flow rate and time of concentration before next command header.\
+                \n\tFinal line: {sum(len(sec) for sec in sections[:i+1])}\
+                \n\tCommand: {command}\
+                \n\tTC: {tc}\
+                \n\tFlow: {flowrate}')
 
     return data
+
+def split_into_sections(lines: List[str], section_header: str) -> List[List[str]]:
+    """Splits the input lines into sections based on the given section header."""
+    sections = []
+    current_section = []
+
+    for line in lines:
+        if section_header in line:
+            if current_section:
+                sections.append(current_section)
+            current_section = [line]
+        else:
+            current_section.append(line)
+
+    if current_section:
+        sections.append(current_section)
+
+    return sections[1:] #omit lines before first section header
 
 def parse_nodes(text: str) -> Tuple[str, str]:
     """Read line and return formatted node strings."""
@@ -258,29 +250,24 @@ def get_command_case(text: str, config: RMConfig) -> ParserState | None:
     return None
 
 def find_flowrate_in_line(line: str, config: RMConfig, command: CommandCase) -> float | None:
-    """Extracts flowrate from a line if present."""
-    if any(flag in line for flag in config.flowrate_map[command]):
-        return get_flowrate(line)
-    return None
-    
-def find_toc_in_line(line: str, config: RMConfig, command: CommandCase) -> float | None:
-    """Extracts time of concentration from a line if present."""
-    if any(flag in line for flag in config.toc_map[command]):
-        return get_toc(line)
-    return None
-
-def get_flowrate(text: str) -> float:
-    """Get flowrate from text."""
-    flowrate_match = re.search(r'(\d+\.\d+)\(cfs\)', text)
+    """Extracts flowrate from a line, if present."""
+    for flag in config.flowrate_map[command]:
+        flowrate_match = re.search(rf'{re.escape(flag)}\s*=\s*(\d+\.\d+)\(cfs\)', line)
+        if flowrate_match:
+            break
     if not flowrate_match:
-        print(f'Error - Failed to extract flow rate from line:\n\t{text}')
-        sys.exit(1)
-    flowrate = float(flowrate_match.group(1))
-    return flowrate
+        return
+    return float(flowrate_match.group(1))
 
-def get_toc(text: str) -> float:
-    """Get time of concentration from text."""
-    return float(text.strip().split()[-2])
+def find_tc_in_line(line: str, config: RMConfig, command: CommandCase) -> float | None:
+    """Extracts time of concentration from a line, if present."""
+    for flag in config.tc_map[command]:
+        tc_match = re.search(rf'{re.escape(flag)}\s*=\s*(\d+\.\d+)\s*min\.', line)
+        if tc_match:
+            break
+    if not tc_match:
+        return
+    return float(tc_match.group(1))
 
 def get_csv_filepath(filepath: str) -> str:
     """Generate csv filepath with same name and location as source."""
@@ -302,8 +289,8 @@ def write_to_csv(data: List[Tuple[str, float, float]], filepath: str, precision:
     with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(headers)
-        for node_str, toc, flowrate in data:
-            writer.writerow([node_str, f'{toc:.{precision}F}', f'{flowrate:.{precision}F}'])
+        for node_str, tc, flowrate in data:
+            writer.writerow([node_str, f'{tc:.{precision}F}', f'{flowrate:.{precision}F}'])
     if verbose:
         print(f'Saved data to {filepath}')
 

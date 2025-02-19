@@ -1,7 +1,6 @@
 ---
 header: 'Riverside County Rational Hydrology Program'
 new-section-text: '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++'
-node-text: 'Process from Point/Station'
 confluence-summary-text: 'Summary of stream data'
 commands:
   INITIAL_AREA: 'INITIAL AREA EVALUATION'
