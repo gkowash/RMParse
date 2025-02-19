@@ -12,6 +12,7 @@ To use the more concise "rmparse" command, add the RMParse repository to the Pat
 variable.
 """
 
+import sys
 import os
 import csv
 import re
@@ -31,7 +32,7 @@ except Exception as e:
     print('Unable to print data; failed to import package "tabulate".')
 
 class InsufficientDataError(Exception):
-    """Throw exception when flow rate and TOC are not determined before the next header line is encountered."""
+    """Throw exception when flow rate and TC are not determined before the next header line is encountered."""
     def __init__(self, message: str, code: int = 0):
         super().__init__(message)
         self.code = code
@@ -39,6 +40,7 @@ class InsufficientDataError(Exception):
 class ParserState(Enum):
     """Cases for parser state."""
     SEARCHING = auto()
+    PARSING_NODES = auto()
     PARSING_COMMAND = auto()
     PARSING_STATS = auto()
     STORING_DATA = auto()
@@ -89,6 +91,7 @@ class RMConfig:
         self.flowrate_map = {CommandCase[key]: normalize(value, suffix=' =') for key, value in data.get("flowrate", {}).items()}
         self.toc_map = {CommandCase[key]: normalize(value, suffix=' =') for key, value in data.get("time-of-concentration", {}).items()}
         self.new_section_text = data.get("new-section-text", {}).lower()
+        self.node_text = data.get("node-text", {}).lower()
         self.confluence_summary_text = data.get("confluence-summary-text", {}).lower()
 
     def set_defaults(self):
@@ -155,16 +158,12 @@ def load_county_config(county: County, template_dir: str | Path) -> RMConfig:
 def process_file(filepath: Path, template_dir: Path = Path('templates')) -> List[Tuple[str, float, float]]:
     """Wrapper function to handle file reading, parsing, and status messages."""
     print(f'\nParsing {filepath.name}...')
-
     lines = read_file(filepath)
     county = next((c for c in County if c.value.lower() in " ".join(lines)), None)
-
     if county is None:
         raise ValueError("Could not determine county from file. Ensure it is listed in the County enum.")
-    
     config = load_county_config(county, template_dir)
     data = parse_data_from_lines(lines, config)
-    
     print('Finished parsing.')
     return data
 
@@ -179,36 +178,54 @@ def parse_data_from_lines(lines: List[str], config: RMConfig) -> List[Tuple[str,
     data = []
 
     for i, line in enumerate(lines):
-        if config.confluence_summary_text in line:
-            found_confluence_summary = True
-
+        print(state)
         if config.new_section_text in line:
+            print(f'{toc=}\n{flowrate=}')
+            # Parse nodes on next line
             if state == ParserState.SEARCHING:
-                node1, node2 = parse_nodes(line)
-                state = ParserState.PARSING_COMMAND
-            # If a confluence entry is missing "Summary of stream data", we don't expect to find flow data
+                state = ParserState.PARSING_NODES
+            # Skip confluence if "Summary of stream data" is not found before next section header
             elif command in (CommandCase.CONFLUENCE_MAIN, CommandCase.CONFLUENCE_MINOR) and not found_confluence_summary:
-                state = ParserState.SEARCHING
+                print('Skipping confluence')
+                toc = None
+                flowrate = None
+                state = ParserState.PARSING_NODES
                 continue
+            # Throw error if neither of the above conditions are met
             else:
                 raise InsufficientDataError(f'Failed to determine flow rate and time of concentration before next command header.\
                     \n\tFinal line: {i}\
                     \n\tCommand: {command}\
-                    \n\tTOC: {toc}\
+                    \n\tTC: {toc}\
                     \n\tFlow: {flowrate}')
             
+        # Extract start and end node
+        elif state == ParserState.PARSING_NODES:
+            print(line)
+            node1, node2 = parse_nodes(line)
+            state = ParserState.PARSING_COMMAND
+
+        # Match command header to expected cases
         elif state == ParserState.PARSING_COMMAND:
             command = get_command_case(line, config)
             if command is not None:
                 nodes = format_nodes(node1, node2, command)
                 state = ParserState.PARSING_STATS
-            
+            else:
+                print('command is None - may indicate error') #TODO: characterize this case in detail
+
+        # Read lines until flow rate and TC have been extracted
         elif state == ParserState.PARSING_STATS:
+            found_confluence_summary = found_confluence_summary or (config.confluence_summary_text in line)
+            if command in (CommandCase.CONFLUENCE_MAIN, CommandCase.CONFLUENCE_MINOR) and not found_confluence_summary:
+                print('skipping stat read for confluence')
+                continue  # for confluences, only read stats located after "Summary of stream data" line
             flowrate = flowrate or find_flowrate_in_line(line, config, command)
             toc = toc or find_toc_in_line(line, config, command)
             if flowrate is not None and toc is not None:
                 state = ParserState.STORING_DATA
-        
+
+        # Save data and reset loop variables
         if state == ParserState.STORING_DATA:
             data.append((nodes, flowrate, toc))
             toc = None
@@ -254,8 +271,11 @@ def find_toc_in_line(line: str, config: RMConfig, command: CommandCase) -> float
 
 def get_flowrate(text: str) -> float:
     """Get flowrate from text."""
-    flowrate_str = text.strip().split()[-1]
-    flowrate = float(flowrate_str.split('(')[0]) #remove (CFS) suffix
+    flowrate_match = re.search(r'(\d+\.\d+)\(cfs\)', text)
+    if not flowrate_match:
+        print(f'Error - Failed to extract flow rate from line:\n\t{text}')
+        sys.exit(1)
+    flowrate = float(flowrate_match.group(1))
     return flowrate
 
 def get_toc(text: str) -> float:
