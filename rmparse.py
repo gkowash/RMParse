@@ -18,6 +18,7 @@ import csv
 import re
 import argparse
 import warnings
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from enum import Enum, auto
 from typing import Tuple, List
@@ -105,7 +106,7 @@ def main() -> None:
     """Parse rational method output file, write data to csv, and print to console."""
     filepaths, precision, print_data = parse_args()
     for filepath in filepaths:
-        data = process_file(filepath)
+        data = process_file(filepath, precision=precision)
         csv_filepath = filepath.with_suffix('.csv')
         write_to_csv(data, precision=precision, filepath=csv_filepath)
         if print_data and PRINT_DATA:
@@ -138,7 +139,7 @@ def parse_args() -> Tuple[List[str], int, bool]:
 
     return files, args.digits, args.print
 
-def process_file(filepath: Path, template_dir: Path = Path('templates')) -> List[Tuple[str, float, float]]:
+def process_file(filepath: Path, precision: int, template_dir: Path = Path('templates')) -> List[Tuple[str, Decimal, Decimal]]:
     """Read a single file and return extracted flow data."""
     print(f'\nParsing {filepath.name}...')
     lines = read_file_lines(filepath)
@@ -146,7 +147,7 @@ def process_file(filepath: Path, template_dir: Path = Path('templates')) -> List
     if county is None:
         raise ValueError("Could not determine county from file. Ensure it is listed in the County enum.")
     config = load_county_config(county, template_dir)
-    data = parse_data_from_lines(lines, config)
+    data = parse_data_from_lines(lines, config, precision=precision)
     print('Finished parsing.')
     return data
 
@@ -172,7 +173,7 @@ def load_county_config(county: County, template_dir: str | Path) -> RMConfig:
     config = RMConfig(filepath=filepath)
     return config
 
-def parse_data_from_lines(lines: List[str], config: RMConfig) -> List[Tuple[str, float, float]]:
+def parse_data_from_lines(lines: List[str], config: RMConfig, precision: int) -> List[Tuple[str, Decimal, Decimal]]:
     """Parse data by processing entire sections instead of line-by-line."""
     sections = split_into_sections(lines, config.new_section_text)
     data = []
@@ -199,6 +200,8 @@ def parse_data_from_lines(lines: List[str], config: RMConfig) -> List[Tuple[str,
             # print('Skipping confluence.')
             continue
         if flowrate and tc:
+            flowrate = round_half_up(flowrate, precision=precision)
+            tc = round_half_up(tc, precision=precision)
             data.append((nodes, flowrate, tc))
         else:
             raise InsufficientDataError(f'Failed to determine flow rate and time of concentration before next command header.\
@@ -208,6 +211,11 @@ def parse_data_from_lines(lines: List[str], config: RMConfig) -> List[Tuple[str,
                 \n\tFlow: {flowrate}')
 
     return data
+
+def round_half_up(value: Decimal | float, precision: int = 0) -> Decimal:
+    """Round to the specified precision using the round-half-up strategy."""
+    rounding_factor = Decimal(f'0.{"0" * precision}')
+    return Decimal(value).quantize(rounding_factor, rounding=ROUND_HALF_UP)
 
 def split_into_sections(lines: List[str], section_header: str) -> List[List[str]]:
     """Splits the input lines into sections based on the given section header."""
@@ -249,7 +257,7 @@ def get_command_case(text: str, config: RMConfig) -> ParserState | None:
             return command_case
     return None
 
-def find_flowrate_in_line(line: str, config: RMConfig, command: CommandCase) -> float | None:
+def find_flowrate_in_line(line: str, config: RMConfig, command: CommandCase) -> Decimal | None:
     """Extracts flowrate from a line, if present."""
     for flag in config.flowrate_map[command]:
         flowrate_match = re.search(rf'{re.escape(flag)}\s*=\s*(\d+\.\d+)\(cfs\)', line)
@@ -257,9 +265,9 @@ def find_flowrate_in_line(line: str, config: RMConfig, command: CommandCase) -> 
             break
     if not flowrate_match:
         return
-    return float(flowrate_match.group(1))
+    return Decimal(flowrate_match.group(1))
 
-def find_tc_in_line(line: str, config: RMConfig, command: CommandCase) -> float | None:
+def find_tc_in_line(line: str, config: RMConfig, command: CommandCase) -> Decimal | None:
     """Extracts time of concentration from a line, if present."""
     for flag in config.tc_map[command]:
         tc_match = re.search(rf'{re.escape(flag)}\s*=\s*(\d+\.\d+)\s*min\.', line)
@@ -267,14 +275,14 @@ def find_tc_in_line(line: str, config: RMConfig, command: CommandCase) -> float 
             break
     if not tc_match:
         return
-    return float(tc_match.group(1))
+    return Decimal(tc_match.group(1))
 
 def get_csv_filepath(filepath: str) -> str:
     """Generate csv filepath with same name and location as source."""
     basename, _ = os.path.splitext(filepath)
     return basename + '.csv'
 
-def print_to_console(data: List[Tuple[str, float, float]], precision: int = 2) -> None:
+def print_to_console(data: List[Tuple[str, Decimal, Decimal]], precision: int = 2) -> None:
     """Print data to command line in a pretty table."""
     headers = ['Nodes', 'Q (CFS)', 'TC (min)'] #TODO: move outside of print_data and write_to_csv
     floatfmt = f'.{precision}F'
@@ -283,14 +291,18 @@ def print_to_console(data: List[Tuple[str, float, float]], precision: int = 2) -
     print(tabulate(data, headers=headers, tablefmt=tablefmt, floatfmt=floatfmt))
     print()
 
-def write_to_csv(data: List[Tuple[str, float, float]], filepath: str, precision: int, verbose: bool = True) -> None:
+def write_to_csv(data: List[Tuple[str, Decimal, Decimal]], filepath: str, precision: int, verbose: bool = True) -> None:
     """Output rational method data to .csv file."""
     headers = ['Nodes', 'Q', 'TC']  #TODO: add storm year as suffix to Q
     with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(headers)
-        for node_str, tc, flowrate in data:
-            writer.writerow([node_str, f'{tc:.{precision}F}', f'{flowrate:.{precision}F}'])
+        for node_str, flowrate, tc in data:
+            print(flowrate, tc)
+            rounding_factor = Decimal(f'1e-{precision}')
+            flowrate_rounded = flowrate.quantize(rounding_factor, rounding=ROUND_HALF_UP)
+            tc_rounded = tc.quantize(rounding_factor, rounding=ROUND_HALF_UP)
+            writer.writerow([node_str, flowrate_rounded, tc_rounded])
     if verbose:
         print(f'Saved data to {filepath}')
 
