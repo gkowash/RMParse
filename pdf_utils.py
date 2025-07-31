@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import time
 import shutil
@@ -68,10 +69,12 @@ def create_pdf_backups(paths: List[Path]) -> None:
         if not pdf_dir.is_dir():
             continue
 
-        # Create backup and replace with empty PDF folder
+        # Create backup inside PDF folder
         timestamp = time.strftime(r'%Y-%m-%d_%H%M%S')
-        backup_dir = path / f'PDF_OLD_{timestamp}'
-        shutil.move(pdf_dir, backup_dir)
+        backup_dir = pdf_dir / f'PDF_OLD_{timestamp}'
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        for file in pdf_dir.glob('*.pdf'):
+            shutil.move(file, backup_dir / file.name)
         print(f'Backed up files to {backup_dir}')
 
 
