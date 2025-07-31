@@ -70,11 +70,13 @@ if "%RMPARSE_PATH:~-1%"=="\" set "RMPARSE_PATH=%RMPARSE_PATH:~0,-1%"
 
 echo %USER_PATH% | findstr /i /c:"%RMPARSE_PATH%" >nul
 if %errorlevel% neq 0 (
-    setx PATH "%USER_PATH%;%RMPARSE_PATH%"
-    echo RMParse added to PATH.
+    set "NEW_PATH=%USER_PATH%%RMPARSE_PATH%"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+        "[Environment]::SetEnvironmentVariable('PATH', \"!NEW_PATH!\", 'User');"
 ) else (
     echo RMParse is already in PATH.
 )
 
-echo Installation successful.
+echo Installation successful. Start a new terminal to use RMParse.
 pause
+exit
