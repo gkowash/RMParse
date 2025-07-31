@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from pdf_utils import convert_to_pdf, open_pdf, get_filepaths
+from pdf_utils import convert_to_pdf, open_pdf, get_filepaths, create_pdf_backups
 
 
 def parse_args() -> argparse.Namespace:
@@ -18,11 +18,13 @@ if __name__ == '__main__':
     # Get list of files to parse from command line arguments
     args = parse_args()
     filepaths = get_filepaths(args.paths)
-    backup_dir = None
+
+    # Create a backup of any existing PDF folders
+    create_pdf_backups(filepaths)
 
     for filepath in filepaths:
         # Convert to PDF, skipping on failure
-        pdf_path, backup_dir = convert_to_pdf(filepath, backup_dir)
+        pdf_path = convert_to_pdf(filepath)
         if not pdf_path:
             continue
         

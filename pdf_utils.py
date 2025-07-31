@@ -58,6 +58,23 @@ def get_filepaths(paths: List[Path]) -> List[Path]:
     return filepaths
 
 
+def create_pdf_backups(paths: List[Path]) -> None:
+    """Backup any existing PDF folders inside each directory."""
+    unique_dirs = list({p.parent for p in paths})
+
+    for path in unique_dirs:
+        # Check existince of PDF folder
+        pdf_dir = path / 'PDF'
+        if not pdf_dir.is_dir():
+            continue
+
+        # Create backup and replace with empty PDF folder
+        timestamp = time.strftime(r'%Y-%m-%d_%H%M%S')
+        backup_dir = path / f'PDF_OLD_{timestamp}'
+        shutil.move(pdf_dir, backup_dir)
+        print(f'Backed up files to {backup_dir}')
+
+
 def get_file_case(filepath: Path) -> FileCase | None:
     """Determine whether a file is WSPG WSW, WSPG OUT, or CIVILD."""
     # Identify WSPG_WSW by suffix
@@ -93,31 +110,24 @@ def open_pdf(filepath: Path) -> None:
     subprocess.run(['start', filepath], shell=True, check=True)
 
 
-def get_pdf_path(file_case: FileCase, input_path: Path, backup_dir: Path | None) -> Tuple[Path, Path | None]:
+def get_pdf_path(file_case: FileCase, input_path: Path) -> Tuple[Path, Path | None]:
     """Construct PDF output path, avoiding overwrites using backups."""
     # Construct file path
+    output_dir = input_path.parent / 'PDF'
     if file_case == FileCase.CIVILD:
-        pdf_path = input_path.with_suffix('.pdf')
+        pdf_name = input_path.with_suffix('.pdf').name
     elif file_case == FileCase.WSPG_OUT:
-        pdf_path = input_path.with_name(f'{input_path.stem}OUT.pdf')
+        pdf_name = f'{input_path.stem}OUT.pdf'
     elif file_case == FileCase.WSPG_WSW:
-        pdf_path = input_path.with_name(f'{input_path.stem}WSW.pdf')
+        pdf_name = f'{input_path.stem}WSW.pdf'
     else:
         raise ValueError(f'Invalid file case: {file_case}')
-    
-    # Handle overwrites by creating backup
-    if pdf_path.exists():
-        if not backup_dir:
-            timestamp = time.strftime(r'%Y-%m-%d_%H%M%S')
-            backup_dir = pdf_path.parent / f'PDF_OLD_{timestamp}'
-            os.makedirs(backup_dir)
-        shutil.copyfile(pdf_path, backup_dir / pdf_path.name)
-        print(f'Backed up old file to {backup_dir / pdf_path.name}')
+    pdf_path = output_dir / pdf_name
 
-    return pdf_path, backup_dir
+    return pdf_path
 
 
-def convert_to_pdf(filepath: Path, backup_dir: Path | None) -> Tuple[Path | None, Path | None]:
+def convert_to_pdf(filepath: Path) -> Path | None:
     """Convert an output file to a PDF depending on the file type."""
     # Infer file type from name and/or contents
     file_case = get_file_case(filepath)
@@ -125,7 +135,7 @@ def convert_to_pdf(filepath: Path, backup_dir: Path | None) -> Tuple[Path | None
         return
 
     # Construct output filepath
-    pdf_path, backup_dir = get_pdf_path(file_case, filepath, backup_dir)
+    pdf_path = get_pdf_path(file_case, filepath)
 
     # Get PDF conversion function for the appropriate case
     case_functions = {
@@ -138,15 +148,18 @@ def convert_to_pdf(filepath: Path, backup_dir: Path | None) -> Tuple[Path | None
     # Call corresponding PDF function
     try:
         pdf_func(filepath, pdf_path)
-        print(f'Created PDF at {pdf_path}\n')
+        print(f'Created PDF at {pdf_path} (file type {file_case.name})')
     except Exception as e:
         print(f'Failed to create PDF at {pdf_path}:\n{e}')
         return
 
-    return pdf_path, backup_dir
+    return pdf_path
 
 def wspg_out_to_pdf(data_path: Path, pdf_path: Path) -> None:
     """Convert a WSPG .out file to a PDF."""
+    # Create output directory if it doesn't exist
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+
     # Create template
     doc = SimpleDocTemplate(
         str(pdf_path),
@@ -188,6 +201,9 @@ def wspg_out_to_pdf(data_path: Path, pdf_path: Path) -> None:
 
 def wspg_wsw_to_pdf(data_path: Path, pdf_path: Path) -> None:
     """Convert a WSPG .wsw file to a PDF."""
+    # Create output directory if it doesn't exist
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+
     # Create template
     doc = SimpleDocTemplate(
         str(pdf_path),
@@ -217,6 +233,8 @@ def wspg_wsw_to_pdf(data_path: Path, pdf_path: Path) -> None:
 
 def civild_to_pdf(data_path: Path, pdf_path: Path) -> None:
     """Convert a CIVIL-D .out file to a PDF."""
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+
     doc = SimpleDocTemplate(
         str(pdf_path),
         pagesize=LETTER,
